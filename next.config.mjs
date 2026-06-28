@@ -10,6 +10,12 @@ const nextConfig = {
   // React 엄격 모드 활성화 (잠재적 문제 조기 감지)
   reactStrictMode: true,
 
+  // 빌드 중 ESLint 생략 (저사양 서버 빌드 메모리 절약 — 타입체크(tsc)는 유지).
+  // 린트는 로컬/CI 에서 `npm run lint` 로 별도 수행한다.
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+
   // 이미지 최적화 (WebP/AVIF 자동 변환)
   images: {
     formats: ["image/avif", "image/webp"],
