@@ -1,0 +1,54 @@
+/* Pretendard 폰트는 next/font/local 로 self-host 한다 (layout.tsx 참고) */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* 전역 기본 테두리색을 디자인 토큰(border)으로 통일 */
+  * {
+    @apply border-border;
+  }
+
+  body {
+    /* 배경: surface(#F8FAFC), 본문 텍스트: content(#0F172A), 본문 폰트: 시스템 폰트 */
+    @apply bg-surface text-content antialiased;
+  }
+
+  /* 제목은 Pretendard(font-heading), 본문은 시스템 폰트(기본 sans) */
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-heading;
+  }
+}
+
+@layer components {
+  /*
+   * 숫자 강조 유틸리티
+   * - 가격/면적/층수 등 숫자가 세로로 정렬되도록 고정폭(tabular-nums) 적용
+   * - 사용 예: <span className="num">12억 5,000</span>
+   */
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* 스켈레톤 shimmer 애니메이션 (좌→우로 빛 흐름) */
+@keyframes aptnow-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* 복사 성공 시 confetti 애니메이션 */
+@keyframes aptnow-confetti {
+  0% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-72px) rotate(220deg);
+    opacity: 0;
+  }
+}

@@ -1,0 +1,39 @@
+# 의존성
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+
+# 테스트
+/coverage
+
+# Next.js 빌드 산출물
+/.next/
+/out/
+
+# 프로덕션 빌드
+/build
+
+# 기타
+.DS_Store
+*.pem
+
+# 디버그 로그
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 환경 변수 (API 키 등 비밀값)
+.env
+.env*.local
+
+# Vercel
+.vercel
+
+# 배포(PM2) 로그
+/logs
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+/src/lib/data/pyeong.progress.json
