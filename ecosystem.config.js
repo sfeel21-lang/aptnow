@@ -1,7 +1,8 @@
 /**
  * PM2 프로세스 설정 (프로덕션 운영).
- * - Next.js 프로덕션 서버(next start)를 클러스터 모드 2 인스턴스로 구동한다.
+ * - Next.js 프로덕션 서버(next start)를 클러스터 모드로 구동한다.
  * - 포트는 PORT 환경변수(3000)로 지정한다.
+ * - 1GB 인스턴스 기준 1 인스턴스(메모리 절약). RAM 여유 시 instances 를 늘려도 됨.
  *
  * 사용:
  *   pm2 start ecosystem.config.js   # 최초 기동
@@ -19,12 +20,12 @@ module.exports = {
       // 프로젝트 루트(이 파일 위치)에서 실행
       cwd: __dirname,
 
-      // 클러스터 모드 2 인스턴스 (CPU 코어 활용 + 무중단 reload)
-      instances: 2,
+      // 1GB 인스턴스 기준 1 인스턴스 (클러스터 워커당 앱이 메모리에 올라가므로 절약)
+      instances: 1,
       exec_mode: "cluster",
 
-      // 메모리 누수 대비 자동 재기동 (512MB 초과 시)
-      max_memory_restart: "512M",
+      // 메모리 누수 대비 자동 재기동 (400MB 초과 시)
+      max_memory_restart: "400M",
 
       // 로그 (logs/ 디렉토리, .gitignore 대상)
       error_file: "logs/aptnow-error.log",
