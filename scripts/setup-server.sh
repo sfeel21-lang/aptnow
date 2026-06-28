@@ -9,9 +9,9 @@
 set -euo pipefail
 
 # ── 사용자 설정 ───────────────────────────────────────────
-REPO_URL="https://github.com/<본인계정>/aptnow.git"   # GitHub 저장소 주소
-DOMAIN="apt.healthfy.com"                              # 서비스 도메인
-APP_DIR="$HOME/aptnow"                                 # 배포 경로
+REPO_URL="https://github.com/sfeel21-lang/aptnow.git"  # GitHub 저장소 주소
+DOMAIN="apt.healthfy.com"                               # 서비스 도메인
+APP_DIR="$HOME/aptnow"                                  # 배포 경로
 # ─────────────────────────────────────────────────────────
 
 echo "▶ [1/8] 시스템 패키지 업데이트"
