@@ -190,7 +190,7 @@ async function fetchAptRentsRaw(
 const cachedFetchRentMonth = unstable_cache(
   (lawdCd: string, dealYmd: string) => fetchAptRentsRaw(lawdCd, dealYmd),
   ["molit-apt-rents"],
-  { revalidate: 3600 },
+  { revalidate: 21600 },
 );
 
 /**

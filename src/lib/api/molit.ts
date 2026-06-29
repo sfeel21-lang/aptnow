@@ -217,7 +217,7 @@ async function fetchAptDealsRaw(
 const cachedFetchMonth = unstable_cache(
   (lawdCd: string, dealYmd: string) => fetchAptDealsRaw(lawdCd, dealYmd),
   ["molit-apt-deals"],
-  { revalidate: 3600 },
+  { revalidate: 21600 },
 );
 
 /**
