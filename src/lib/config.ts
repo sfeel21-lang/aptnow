@@ -28,9 +28,9 @@ export const serverConfig = {
 
 /** 공개 설정 (NEXT_PUBLIC_*, 클라이언트에서도 사용 가능) */
 export const publicConfig = {
-  /** AdSense 게시자 ID */
+  /** AdSense 게시자 ID (공개 정보 — 페이지 소스에 노출되는 값) */
   adsenseClient:
-    process.env.NEXT_PUBLIC_ADSENSE_CLIENT ?? "ca-pub-XXXXXXXXXX",
+    process.env.NEXT_PUBLIC_ADSENSE_CLIENT ?? "ca-pub-3556419089201867",
   /** 사이트 기본 URL (canonical/OG 등에 사용) */
   siteUrl: process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
   /** Google Analytics 4 측정 ID (미설정 시 GA 비활성화) */
