@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import axios, { AxiosError } from "axios";
 import { XMLParser } from "fast-xml-parser";
 import {
@@ -152,59 +153,47 @@ async function requestXml(
     const axiosError = error as AxiosError;
     // 타임아웃(ECONNABORTED) 시 1회 한정 재시도
     if (axiosError.code === "ECONNABORTED" && attempt < 1) {
-      console.warn(
-        `[molit] 타임아웃 발생, 재시도합니다 (LAWD_CD=${lawdCd}, DEAL_YMD=${dealYmd})`,
-      );
+      return requestXml(lawdCd, dealYmd, serviceKey, attempt + 1);
+    }
+    // 호출 제한(429) 시 점증 백오프로 최대 3회 재시도 (data.go.kr rate limit 완화)
+    if (axiosError.response?.status === 429 && attempt < 3) {
+      await sleep(600 * (attempt + 1));
       return requestXml(lawdCd, dealYmd, serviceKey, attempt + 1);
     }
     throw error;
   }
 }
 
+/** 지연 헬퍼 */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /**
- * 특정 지역/월의 아파트 매매 실거래가를 조회한다.
- * @param lawdCd 법정동 코드 5자리 (예: "11680")
- * @param dealYmd 거래연월 6자리 (예: "202411")
- * @returns 가공된 거래 목록 (실패/무결과 시 빈 배열)
+ * 특정 지역/월의 매매 실거래가를 조회한다(원본 — 실패 시 throw).
+ * - 네트워크/타임아웃/429/비정상 응답은 throw 하여 "빈 결과가 캐시되지 않게" 한다.
+ * - 정상 응답이면서 거래가 없으면 빈 배열을 반환(이건 캐시되어도 정상).
  */
-export async function fetchAptDeals(
+async function fetchAptDealsRaw(
   lawdCd: string,
   dealYmd: string,
 ): Promise<AptDeal[]> {
-  // 1) API 키 (미설정 시 config 에서 명확한 에러 throw)
   const serviceKey = serverConfig.molitApiKey;
 
-  let xml: string;
-  try {
-    xml = await requestXml(lawdCd, dealYmd, serviceKey);
-  } catch (error) {
-    // 네트워크/타임아웃 등 요청 실패 — 경고 후 빈 배열
-    console.warn(
-      `[molit] 요청 실패 (LAWD_CD=${lawdCd}, DEAL_YMD=${dealYmd}):`,
-      error instanceof Error ? error.message : error,
-    );
-    return [];
-  }
+  // 요청 실패(429/타임아웃/네트워크)는 throw 로 전파 → 캐시 안 됨
+  const xml = await requestXml(lawdCd, dealYmd, serviceKey);
 
-  // 2) XML 파싱 (실패 시 빈 배열 + 콘솔 경고)
-  let parsed: ParsedMolitResponse;
-  try {
-    parsed = xmlParser.parse(xml) as ParsedMolitResponse;
-  } catch (error) {
-    console.warn("[molit] XML 파싱 실패:", error);
-    return [];
-  }
+  const parsed = xmlParser.parse(xml) as ParsedMolitResponse;
 
-  // 3) 결과코드 확인
+  // 결과코드 비정상(쿼터 등) → 빈 배열 캐시 방지 위해 throw
   const resultCode = parsed.response?.header?.resultCode;
   if (resultCode !== undefined && resultCode !== SUCCESS_CODE) {
-    console.warn(
-      `[molit] API 오류 응답 (resultCode=${resultCode}, ${parsed.response?.header?.resultMsg ?? ""})`,
+    throw new Error(
+      `[molit] API resultCode=${resultCode} ${parsed.response?.header?.resultMsg ?? ""}`,
     );
-    return [];
   }
 
-  // 4) item 목록 정규화 (단일 객체/배열/빈값 모두 대응)
+  // item 목록 정규화 (단일 객체/배열/빈값 모두 대응)
   const items = parsed.response?.body?.items;
   if (!items || typeof items !== "object") return [];
   const rawItem = items.item;
@@ -214,6 +203,38 @@ export async function fetchAptDeals(
   return itemArray.map((item) =>
     toAptDeal(toRaw(item as Record<string, unknown>), lawdCd),
   );
+}
+
+/**
+ * 월 단위 캐시 (지역+연월 키, 1시간 재검증).
+ * - 실거래가는 자주 바뀌지 않으므로 캐시로 국토부 API 호출량을 크게 줄여 429(호출 제한)를 방지한다.
+ * - 같은 (지역, 연월) 요청은 여러 페이지/지역에서 재사용된다.
+ */
+const cachedFetchMonth = unstable_cache(
+  (lawdCd: string, dealYmd: string) => fetchAptDealsRaw(lawdCd, dealYmd),
+  ["molit-apt-deals"],
+  { revalidate: 3600 },
+);
+
+/**
+ * 특정 지역/월의 아파트 매매 실거래가를 조회한다(캐시 적용).
+ * @param lawdCd 법정동 코드 5자리 (예: "11680")
+ * @param dealYmd 거래연월 6자리 (예: "202411")
+ * @returns 가공된 거래 목록 (실패/무결과 시 빈 배열)
+ */
+export async function fetchAptDeals(
+  lawdCd: string,
+  dealYmd: string,
+): Promise<AptDeal[]> {
+  try {
+    return await cachedFetchMonth(lawdCd, dealYmd);
+  } catch (error) {
+    console.warn(
+      `[molit] 요청 실패 (LAWD_CD=${lawdCd}, DEAL_YMD=${dealYmd}):`,
+      error instanceof Error ? error.message : error,
+    );
+    return [];
+  }
 }
 
 /**

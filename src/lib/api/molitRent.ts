@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import axios, { AxiosError } from "axios";
 import { XMLParser } from "fast-xml-parser";
 import {
@@ -137,46 +138,37 @@ async function requestXml(
     if (axiosError.code === "ECONNABORTED" && attempt < 1) {
       return requestXml(lawdCd, dealYmd, serviceKey, attempt + 1);
     }
+    // 호출 제한(429) 시 점증 백오프로 최대 3회 재시도
+    if (axiosError.response?.status === 429 && attempt < 3) {
+      await sleep(600 * (attempt + 1));
+      return requestXml(lawdCd, dealYmd, serviceKey, attempt + 1);
+    }
     throw error;
   }
 }
 
+/** 지연 헬퍼 */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /**
- * 특정 지역/월의 아파트 전월세 실거래가를 조회한다(전세+월세 모두).
- * @param lawdCd 법정동 코드 5자리
- * @param dealYmd 거래연월 6자리 (예: "202606")
+ * 특정 지역/월의 전월세 실거래가를 조회한다(원본 — 실패 시 throw).
+ * - 429/타임아웃/비정상 응답은 throw 하여 "빈 결과가 캐시되지 않게" 한다.
  */
-export async function fetchAptRents(
+async function fetchAptRentsRaw(
   lawdCd: string,
   dealYmd: string,
 ): Promise<AptDeal[]> {
   const serviceKey = serverConfig.molitApiKey;
-
-  let xml: string;
-  try {
-    xml = await requestXml(lawdCd, dealYmd, serviceKey);
-  } catch (error) {
-    console.warn(
-      `[molitRent] 요청 실패 (LAWD_CD=${lawdCd}, DEAL_YMD=${dealYmd}):`,
-      error instanceof Error ? error.message : error,
-    );
-    return [];
-  }
-
-  let parsed: ParsedRentResponse;
-  try {
-    parsed = xmlParser.parse(xml) as ParsedRentResponse;
-  } catch (error) {
-    console.warn("[molitRent] XML 파싱 실패:", error);
-    return [];
-  }
+  const xml = await requestXml(lawdCd, dealYmd, serviceKey);
+  const parsed = xmlParser.parse(xml) as ParsedRentResponse;
 
   const resultCode = parsed.response?.header?.resultCode;
   if (resultCode !== undefined && resultCode !== SUCCESS_CODE) {
-    console.warn(
-      `[molitRent] API 오류 응답 (resultCode=${resultCode}, ${parsed.response?.header?.resultMsg ?? ""})`,
+    throw new Error(
+      `[molitRent] API resultCode=${resultCode} ${parsed.response?.header?.resultMsg ?? ""}`,
     );
-    return [];
   }
 
   const items = parsed.response?.body?.items;
@@ -188,6 +180,33 @@ export async function fetchAptRents(
   return itemArray.map((item) =>
     toRentDeal(item as Record<string, unknown>, lawdCd),
   );
+}
+
+/** 월 단위 캐시 (지역+연월, 1시간) — 호출량 절감으로 429 방지 */
+const cachedFetchRentMonth = unstable_cache(
+  (lawdCd: string, dealYmd: string) => fetchAptRentsRaw(lawdCd, dealYmd),
+  ["molit-apt-rents"],
+  { revalidate: 3600 },
+);
+
+/**
+ * 특정 지역/월의 아파트 전월세 실거래가를 조회한다(캐시 적용, 전세+월세 모두).
+ * @param lawdCd 법정동 코드 5자리
+ * @param dealYmd 거래연월 6자리 (예: "202606")
+ */
+export async function fetchAptRents(
+  lawdCd: string,
+  dealYmd: string,
+): Promise<AptDeal[]> {
+  try {
+    return await cachedFetchRentMonth(lawdCd, dealYmd);
+  } catch (error) {
+    console.warn(
+      `[molitRent] 요청 실패 (LAWD_CD=${lawdCd}, DEAL_YMD=${dealYmd}):`,
+      error instanceof Error ? error.message : error,
+    );
+    return [];
+  }
 }
 
 /**
