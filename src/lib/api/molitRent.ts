@@ -7,6 +7,7 @@ import {
   parseAmount,
 } from "@/lib/utils/format";
 import { resolvePyeong } from "@/lib/data/pyeongIndex";
+import { withDataGoKrLimit } from "@/lib/api/rateLimit";
 import { serverConfig } from "@/lib/config";
 import type { AptDeal } from "@/types";
 
@@ -120,18 +121,21 @@ async function requestXml(
   attempt = 0,
 ): Promise<string> {
   try {
-    const { data } = await axios.get<string>(ENDPOINT, {
-      params: {
-        serviceKey,
-        LAWD_CD: lawdCd,
-        DEAL_YMD: dealYmd,
-        numOfRows: NUM_OF_ROWS,
-        pageNo: 1,
-      },
-      headers: { "User-Agent": USER_AGENT, Accept: "application/xml" },
-      timeout: TIMEOUT_MS,
-      responseType: "text",
-    });
+    // 전역 호출 제한기 통과 (동시성/간격 제한으로 429 방지)
+    const { data } = await withDataGoKrLimit(() =>
+      axios.get<string>(ENDPOINT, {
+        params: {
+          serviceKey,
+          LAWD_CD: lawdCd,
+          DEAL_YMD: dealYmd,
+          numOfRows: NUM_OF_ROWS,
+          pageNo: 1,
+        },
+        headers: { "User-Agent": USER_AGENT, Accept: "application/xml" },
+        timeout: TIMEOUT_MS,
+        responseType: "text",
+      }),
+    );
     return data;
   } catch (error) {
     const axiosError = error as AxiosError;

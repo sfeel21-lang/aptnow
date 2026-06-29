@@ -7,6 +7,7 @@ import {
   parseAmount,
 } from "@/lib/utils/format";
 import { resolvePyeong } from "@/lib/data/pyeongIndex";
+import { withDataGoKrLimit } from "@/lib/api/rateLimit";
 import { serverConfig } from "@/lib/config";
 import type { AptDeal, MolitAptDealRaw } from "@/types";
 
@@ -130,24 +131,27 @@ async function requestXml(
   attempt = 0,
 ): Promise<string> {
   try {
-    const { data } = await axios.get<string>(ENDPOINT, {
-      params: {
-        serviceKey, // 디코딩된 키 (axios 가 자동 인코딩)
-        LAWD_CD: lawdCd,
-        DEAL_YMD: dealYmd,
-        numOfRows: NUM_OF_ROWS,
-        pageNo: 1,
-      },
-      headers: {
-        // WAF 차단 회피용 브라우저 User-Agent 명시
-        "User-Agent": USER_AGENT,
-        // axios 기본 Accept(application/json) 를 덮어써 XML 응답을 강제한다.
-        // (data.go.kr 은 Accept 헤더에 따라 JSON/XML 을 다르게 내려줌)
-        Accept: "application/xml",
-      },
-      timeout: TIMEOUT_MS,
-      responseType: "text",
-    });
+    // 전역 호출 제한기 통과 (동시성/간격 제한으로 429 방지)
+    const { data } = await withDataGoKrLimit(() =>
+      axios.get<string>(ENDPOINT, {
+        params: {
+          serviceKey, // 디코딩된 키 (axios 가 자동 인코딩)
+          LAWD_CD: lawdCd,
+          DEAL_YMD: dealYmd,
+          numOfRows: NUM_OF_ROWS,
+          pageNo: 1,
+        },
+        headers: {
+          // WAF 차단 회피용 브라우저 User-Agent 명시
+          "User-Agent": USER_AGENT,
+          // axios 기본 Accept(application/json) 를 덮어써 XML 응답을 강제한다.
+          // (data.go.kr 은 Accept 헤더에 따라 JSON/XML 을 다르게 내려줌)
+          Accept: "application/xml",
+        },
+        timeout: TIMEOUT_MS,
+        responseType: "text",
+      }),
+    );
     return data;
   } catch (error) {
     const axiosError = error as AxiosError;
